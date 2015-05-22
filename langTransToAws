@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+# RUN langTransToAws tradetech-dev/langtrans/js/
+# otherwise I will use the host to put in the right bucket.
+import sys, glob, os, sh
+
+host = os.uname()[1].replace('.tradetech.net', '')
+
+bucket = sys.argv[1] #'tradetech-dev/langtrans/js/'
+
+if (host !== 'sys5b'): continue
+if (!bucket):
+    bucket = 'tradetech-'+host+'/langtrans/js/'
+
+#This is the actual use of awscli to push up to the s3 bucket
+def pushUp (bucket, filename):
+    #need the environment variables declared first for accesskeys
+    loc = 's3://'+bucket
+
+    s3 = sh.Command('aws')
+
+    s3('s3','cp','./'+filename, loc)
+
+
+# loop over files /var/spool/LangTrans/*.js
+# take them and edit it
+# take that edited version and push it up to aws
+# then remove the edited version
+os.chdir('/var/spool/LangTrans/')
+languages = glob.glob('*.js')
+for lang in languages:
+    if '2' in lang: break
+
+    name = lang.replace('.js', '')
+    f = open(lang)
+    filedata = f.read().replace("LangTransTable = new Array","LangTransTable."+name+" = new Array")
+    f.close()
+
+    name += '2.js'
+    f = open(name, 'w+')
+    f.write(filedata)
+    f.close()
+
+    bucket += lang
+    pushUp(bucket, name)
+
+    os.remove(name)
