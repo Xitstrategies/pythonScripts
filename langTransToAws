@@ -1,47 +1,49 @@
 #!/usr/bin/env python
-
-# RUN langTransToAws tradetech-dev/langtrans/js/
-# otherwise I will use the host to put in the right bucket.
+'''
+RUN langTransToAws tradetech-dev/public/langtrans/js/
+otherwise I will use the host to put in the right bucket.
+'''
 import sys, glob, os, sh
 
-host = os.uname()[1].replace('.tradetech.net', '')
+def noBucket ():
+    host = os.uname()[1]
+    if 'dev' in host:
+        host = 'dev'
+    else:
+        host = 'prod'
 
-bucket = sys.argv[1] #'tradetech-dev/langtrans/js/'
-
-if (host !== 'sys5b'): continue
-if (!bucket):
-    bucket = 'tradetech-'+host+'/langtrans/js/'
-
-#This is the actual use of awscli to push up to the s3 bucket
-def pushUp (bucket, filename):
-    #need the environment variables declared first for accesskeys
-    loc = 's3://'+bucket
-
-    s3 = sh.Command('aws')
-
-    s3('s3','cp','./'+filename, loc)
+    bucket = 'tradetech-'+host+'/public/langtrans/js/'
 
 
-# loop over files /var/spool/LangTrans/*.js
-# take them and edit it
-# take that edited version and push it up to aws
-# then remove the edited version
-os.chdir('/var/spool/LangTrans/')
-languages = glob.glob('*.js')
-for lang in languages:
-    if '2' in lang: break
+'''
+loop over files /var/spool/LangTrans/*.js
+take them and edit it take that edited version and push it up to aws
+then remove the edited version
+'''
+def process_files ():
+    os.chdir('/var/spool/LangTrans/')
+    os.mkdtemp('./temp')
+    languages = glob.glob('*.js')
 
-    name = lang.replace('.js', '')
-    f = open(lang)
-    filedata = f.read().replace("LangTransTable = new Array","LangTransTable."+name+" = new Array")
-    f.close()
+    for lang in languages:
+        name = lang.replace('.js', '')
+        while open(lang) as f:
+            while open('temp/'+lang, 'w+') as w:
+                w.write(f.read().replace("LangTransTable = new Array","LangTransTable."+name+" = new Array"))
 
-    name += '2.js'
-    f = open(name, 'w+')
-    f.write(filedata)
-    f.close()
+    '''
+    need the environment variables declared first for accesskeys
+    '''
+    sh.Command('aws')('s3','sync','./temp', 's3://'+bucket)
 
-    bucket += lang
-    pushUp(bucket, name)
 
-    os.remove(name)
+def main():
+    bucket = sys.argv[1] #'tradetech-dev/langtrans/js/'
+
+    if !bucket: noBucket()
+    process_files()
+    rm('-rf', './temp')
+
+
+if __name__ == "__main__":
+    main()
